@@ -1,0 +1,21 @@
+,bcr_patient_barcode,menopause,age,method_initial_path_dx,surgical_procedure_first,margin_status,lymph_nodes,lymph_nodeN,ajcc_pathologic_tumor_stage,er_status,pr_status,her2_status,anatomic_neoplasm_subdivision
+1,TNBC1,1,53,Core needle biopsy,Lumpectomy,0,29,2,Stage IIB,0,0,0,Right Upper Inner Quadrant|Right Upper Outer Quadrant|Right
+2,TNBC2,0,40,Excisional Biopsy,Simple Mastectomy,0,1,0,Stage IIA,0,0,0,Left
+3,TNBC3,1,59,Core needle biopsy,Modified Radical Mastectomy,0,26,7,Stage IIIA,0,0,0,Left Upper Outer Quadrant|Left Lower Outer Quadrant|Left
+4,TNBC4,1,58,Tumor resection,Simple Mastectomy,1,15,2,Stage IIB,0,0,0,Left Upper Outer Quadrant
+5,TNBC5,1,79,"Other method, specify:",Modified Radical Mastectomy,0,25,8,Stage IIIA,0,0,0,Left Upper Outer Quadrant
+6,TNBC6,1,72,Fine needle aspiration biopsy,Modified Radical Mastectomy,0,11,0,Stage IIA,0,0,0,Left Lower Inner Quadrant
+7,TNBC7,0,53,Tumor resection,Other,0,10,0,Stage IIA,0,0,0,Right
+8,TNBC8,0,44,Core needle biopsy,Lumpectomy,0,1,0,Stage IA,0,0,0,Right Lower Inner Quadrant|Right Lower Outer Quadrant|Right
+9,TNBC9,1,62,Tumor resection,Modified Radical Mastectomy,0,10,0,Stage IIA,0,0,0,Right Upper Inner Quadrant
+10,TNBC10,0,38,Core needle biopsy,Modified Radical Mastectomy,0,21,10,Stage IIIC,0,0,0,Left Upper Outer Quadrant|Left Lower Outer Quadrant|Left
+11,Normal1,0,57,Core needle biopsy,Lumpectomy,0,1,0,Stage IIA,0,0,0,Left
+12,Normal2,1,56,Core needle biopsy,Simple Mastectomy,0,4,0,Stage IIA,1,1,0,Right
+13,Normal3,1,64,Core needle biopsy,Lumpectomy,0,2,0,Stage I,1,1,1,Right Upper Inner Quadrant|Right
+14,Normal4,1,78,Core needle biopsy,Modified Radical Mastectomy,0,25,2,Stage IIB,1,1,0,Right Upper Inner Quadrant|Right
+15,Normal5,1,79,Core needle biopsy,Simple Mastectomy,0,2,0,Stage IIA,1,1,0,Left Upper Outer Quadrant|Left
+16,Normal6,1,53,Core needle biopsy,Lumpectomy,0,29,2,Stage IIB,0,0,0,Right Upper Inner Quadrant|Right Upper Outer Quadrant|Right
+17,Normal7,1,63,Tumor resection,Simple Mastectomy,0,3,0,Stage IA,1,0,0,Right Upper Outer Quadrant|Right
+18,Normal8,1,62,Core needle biopsy,Simple Mastectomy,0,1,0,Stage IIA,1,1,0,Left Lower Outer Quadrant|Left
+19,Normal9,0,43,Core needle biopsy,Simple Mastectomy,0,5,1,Stage IIB,1,1,1,Right Upper Inner Quadrant|Right Upper Outer Quadrant|Right Lower Inner Quadrant|Right Lower Outer Quadrant|Right
+20,Normal10,0,37,Core needle biopsy,Simple Mastectomy,0,1,0,Stage IIA,1,0,0,Left Upper Outer Quadrant|Left

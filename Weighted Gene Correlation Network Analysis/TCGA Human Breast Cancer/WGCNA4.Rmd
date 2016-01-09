@@ -1,0 +1,567 @@
+---
+title: "Unsupervised Weighted Correlation Network Analysis (WGCNA) of a Published TCGA Human Breast Cancer Dataset"
+author: "Richard Chen"
+date: "August 21, 2015"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+
+Correlation networks are increasingly being used in bioinformatics applications. For example, weighted gene co-expression network analysis is a systems biology method for describing the correlation patterns among genes across microarray samples. Weighted correlation network analysis (WGCNA) can be used for finding clusters (modules) of highly correlated genes, for summarizing such clusters using the module eigengene or an intramodular hub gene, for relating modules to one another and to external sample traits (using eigengene network methodology), and for calculating module membership measures. Correlation networks facilitate network based gene screening methods that can be used to identify candidate biomarkers or therapeutic targets. These methods have been successfully applied in various biological contexts, e.g. cancer, mouse genetics, yeast genetics, and analysis of brain imaging data. While parts of the correlation network methodology have been described in separate publications, there is a need to provide a user-friendly, comprehensive, and consistent software implementation and an accompanying tutorial.
+
+The WGCNA R software package is a comprehensive collection of R functions for performing various aspects of weighted correlation network analysis. The package includes functions for network construction, module detection, gene selection, calculations of topological properties, data simulation, visualization, and interfacing with external software. While the methods development was motivated by gene expression data, the underlying data mining approach can be applied to a variety of different settings.
+
+# 0. Automatic Installation from CRAN
+The WGCNA package is now available from the Comprehensive R Archive Network (CRAN), the standard repository for R add-on packages. Currently, one of the required packages is only available from Bioconductor and needs to be installed separately. To install the required packages and WGCNA, simply type
+```{R, eval = FALSE}
+source("http://bioconductor.org/biocLite.R") 
+biocLite(c("AnnotationDbi", "impute", "GO.db", "preprocessCore", "org.Hs.eg.db", "impute". "WGCNA")) 
+```
+
+Then, we load our dependencies.
+```{R, results="hide"}
+library(WGCNA)
+library(ggplot2)
+library(ggdendro)
+options(stringsAsFactors = FALSE);
+```
+
+
+
+
+
+# 1. Data input, cleaning and pre-processing
+## 1.a Loading expression data
+First, we read in raw counts from the breast cancer dataset.
+```{R}
+BCData = read.csv("TNBC10vNormal10_2_sd.csv")
+```
+
+We can take a quick look at what is in the dataset.
+```{R}
+dim(BCData); BCData[1:6, 1:10]
+```
+
+Each row corresponds to a gene, and each column corresponds to a sample name or a gene annotation. We can remove the gene annotation data nad transpose the expression data for further analysis.
+```{R}
+datExpr = as.data.frame(t(BCData[, -c(1:3)]))
+names(datExpr) = BCData$Entrez
+rownames(datExpr) = names(BCData)[-c(1:3)]
+dim(datExpr); datExpr[1:6, 1:10]
+```
+
+
+
+## 1.b Checking data for excessive missing values and identification of outlier microarray samples
+We first check for genes and samples with too many missing values:
+```{R}
+gsg <- goodSamplesGenes(datExpr, verbose = 3);
+gsg$allOK
+```
+
+If the last statement returns TRUE, all genes have passed the cuts. If not, we remove the offending genes and samples
+from the data:
+```{R}
+if (!gsg$allOK)
+{
+	# Optionally, print the gene and sample names that were removed
+	if (sum(!gsg$goodGenes)>0)
+		printFlush(paste("Removing genes:", paste(names(datExpr)[!gsg$goodGenes], collapse = ", ")))
+	if (sum(!gsg$goodSamples)>0)
+		printFlush(paste("Removing samples:", paste(rownames(datExpr)[!gsg$goodSamples], collapse = ", ")))
+	# Remove the offending genes and samples from the data
+	datExpr = datExpr[gsg$goodSamples, gsg$goodGenes]
+}
+```
+
+Next we cluster the samples (in contrast to clustering genes that will come later) to see if there are any obvious outliers. There are two outliers, TNBC2, TNBC5, and TNBC10. One can remove it by hand, or use an automatic approach. Choose a height cut that will remove the offending sample, say 5.8e+05 (the red line in the plot), and use a branch cut at that height. The variable datExpr now contains the expression data ready for network analysis.
+```{R, fig.width = 20, fig.height = 20}
+sampleTree <- hclust(dist(datExpr), method = "average");
+plot(sampleTree, main = "Sample clustering to detect outliers", cex = 2)
+
+abline(h = 5.8e+05, col = "red")
+
+clust = cutreeStatic(sampleTree, cutHeight = 5.8e+05, minSize = 10)
+table(clust)
+# clust 1 contains the samples we want to keep.
+keepSamples <- (clust==1)
+datExpr1 = datExpr[keepSamples, ]
+nGenes = ncol(datExpr1)
+nSamples = nrow(datExpr1)
+```
+
+
+
+## 1.c Loading clinical trait data
+We now read in the trait data and match the samples for which they were measured to the expression samples.
+```{R}
+traitData = read.csv("clinical_traits_TNBC10vNormal10_2.csv")
+dim(traitData); names(traitData)
+```
+
+Removing columns that hold information we do not need.
+```{R}
+allTraits = traitData[, -c(5, 6, 10, 14)]
+allTraits = allTraits[, c(2:10)]
+dim(allTraits); names(allTraits); allTraits[1:6,1:6]
+```
+
+Finally, forming a data frame analogous to expression data that will hold the clinical traits. Here, we melted the Patient Barcode column into the rownames of our dataframe.
+```{R}
+Samples = rownames(datExpr1)
+traitRows = match(Samples, allTraits$bcr_patient_barcode)
+datTraits = allTraits[traitRows, -1]
+rownames(datTraits) = allTraits[traitRows, 1]
+datTraits[1:6,1:6]
+collectGarbage()
+```
+
+We now have the expression data in the variable datExpr, and the corresponding clinical traits in the variable datTraits. Before we continue with network construction and module detection, we visualize how the clinical traits relate to the sample dendrogram.
+```{R, fig.width = 20, fig.height = 20}
+sampleTree2 = hclust(dist(datExpr1), method = "average")
+#Convert traits to a color representation: white -> low, red -> high, grey -> missing entry
+traitColors = numbers2colors(datTraits, signed = FALSE)
+#Plot the sample dendrogram and the colors underneath.
+plotDendroAndColors(sampleTree2, traitColors,
+					groupLabels = names(datTraits),
+					main = "Sample dendrogram and trait heatmap",
+					cex.colorLabels = 1,
+					cex.dendroLabels = 2,
+					cex.rowText = 1)
+```
+
+In the plot, shown in Fig. 2, white means a low value, red a high value, and grey a missing entry. The last step is to save the relevant expression and trait data for use in the next steps of the tutorial.
+```{R}
+save(datExpr1, datTraits, file = "TNBC10vNormal10_2_sd-01-dataInput.RData") 
+```
+
+
+
+
+# 2. Network construction and module detection
+In constructing a weighted gene network, we need to choose the soft thresholding power (beta) that raises co-expression similarity, which best calculates adjacency.  This step is the bedrock of all network analyses using the WGCNA methodology.
+
+## 2.a Automatic construction of the gene network and identification of modules
+### 2.a.1 Automatic network construction and module detection
+Here, we automatically construct our gene network by using 'pickSoftThreshold', which aids the user in choosing a proper soft-thresholding power. The user chooses a set of candidate powers, and the function returns a set of network indices that should be inspected, for example as follows:
+```{R}
+# Choose a set of soft-thresholding powers = [1]  1  2  3  4  5  6  7  8  9 10 12 14 16 18 20
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+# Call the network topology analysis function
+sft = pickSoftThreshold(datExpr1, powerVector = powers, verbose = 5)
+```
+
+We can plot the Scale-free topology fit index as a function of the soft-thresholding. The red line corresponds to using an R^2 cut-off of h.
+```{R, fig.width = 7, fig.height = 7}
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+    main = paste("Scale independence"));
+    text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+    labels=powers,col="red");
+abline(h=0.90,col="red")
+```
+
+We can also plot Mean Connectivity as a function of the soft-thresholding power.
+```{R, fig.width = 7, fig.height = 7}
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+    xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+    main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers,col="red")
+```
+
+### 2.a.2 One-step network construction and module detection
+We can now construct the gene network and identify modules. We chose the soft thresholding power 6 and a relatively large minimum module size of 30. A power of 5 was chosen since it is the lowest power f or which the scale-free topology fit index reaches 0.90.
+
+The parameter mergeCutHeight is the threshold for merging of modules. We have also instructed the function to return numeric, rather than color, labels for modules, and to save the Topological Overlap Matrix. For example, net-colors contains the module assignment, and net-MEs contains the module eigengenes of the modules.
+```{R}
+net <- blockwiseModules(datExpr1, power = 5,
+                        TOMType = "unsigned", minModuleSize = 30,
+                        reassignThreshold = 0, mergeCutHeight = 0.25,
+                        numericLabels = TRUE, pamRespectsDendro = FALSE,
+                        saveTOMs = TRUE,
+                        saveTOMFileBase = "femaleMouseTOM",
+                        verbose = 3)
+net$MEs[1:5, 1:6]
+```
+
+We now return to the network analysis. To see how many modules were identified and what the module sizes are, one can use table(net$colors).
+```{R}
+table(net$colors)
+```
+
+The hierarchical clustering dendrogram (tree) used for the module identification is returned in net$dendrograms[[1]]. The dendrogram can be displayed together with the color assignment using the following code:
+```{R, fig.width = 10, fig.height = 10}
+mergedColors = labels2colors(net$colors)
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
+                    "Module colors",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+```
+
+We now save the module assignment and module eigengene information necessary for subsequent analysis.
+```{R}
+moduleLabels = net$colors
+moduleColors = labels2colors(net$colors)
+MEs = net$MEs;
+geneTree = net$dendrograms[[1]];
+save(MEs, moduleLabels, moduleColors, geneTree,
+    file = "TNBC10vNormal10_2_sd-02-networkConstruction-auto.RData")
+```
+
+
+
+
+
+# 3. Relating modules to external information and identifying important genes
+## 3.a Quantifying module-trait associations
+In this analysis we would like to identify modules that are significantly associated with the measured clinical traits. Since we already have a summary profile (eigengene) for each module, we simply correlate eigengenes with external traits and look for the most significant associations:
+```{R}
+# Define numbers of genes and samples
+nGenes = ncol(datExpr1);
+nSamples = nrow(datExpr1);
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr1, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, datTraits, use = "p");
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples);
+```
+
+Since we have a moderately large number of modules and traits, a suitable graphical representation will help in reading the table. We color code each association by the correlation value:
+```{R}
+# Will display correlations and their p-values
+textMatrix <- paste(signif(moduleTraitCor, 2), "\n(",
+                    signif(moduleTraitPvalue, 1), ")", sep = "");
+                    dim(textMatrix) = dim(moduleTraitCor)
+                    par(mar = c(6, 8.5, 3, 3));
+```
+
+We can display the correlation values within a heatmap plot
+```{R, fig.width = 15, fig.height = 15}
+labeledHeatmap(Matrix = moduleTraitCor,
+              xLabels = names(datTraits),
+              yLabels = names(MEs),
+              ySymbols = names(MEs),
+              colorLabels = FALSE,
+              colors = greenWhiteRed(50),
+              textMatrix = textMatrix,
+              setStdMargins = FALSE,
+              cex.text = 0.5,
+              zlim = c(-1,1),
+              main = paste("Module-trait relationships"))
+```
+
+## 3.b Gene relationship to trait and important modules: Gene Significance and Module Membership
+We quantify associations of individual genes with our trait of interest (weight) by defining Gene Significance GS as (the absolute value of) the correlation between the gene and the trait. For each module, we also define a quantitative measure of module membership MM as the correlation of the module eigengene and the gene expression profile. This allows us to quantify the similarity of all genes on the array to every module. Each row corresponds to a module eigengene, column to a trait. Each cell contains the corresponding correlation and p-value. The table is color-coded by correlation according to the color legend.
+```{R}
+# Define variable weight containing the weight column of datTrait
+er_status = as.data.frame(datTraits$er_status)
+names(er_status) = "er_status"
+#names (colors) of the modules
+modNames = substring(names(MEs), 3)
+geneModuleMembership = as.data.frame(cor(datExpr1, MEs, use = "p"))
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples))
+names(geneModuleMembership) = paste("MM", modNames, sep="")
+names(MMPvalue) = paste("p.MM", modNames, sep="")
+geneTraitSignificance = as.data.frame(cor(datExpr1, er_status, use = "p"))
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples))
+names(geneTraitSignificance) = paste("GS.", names(er_status), sep="")
+names(GSPvalue) = paste("p.GS.", names(er_status), sep="")
+```
+
+## 3.c Intramodular analysis: identifying genes with high GS and MM
+Using the GS and MM measures, we can identify genes that have a high significance for weight as well as high module membership in interesting modules. As an example, we look at the brown module that has the highest association with weight. We plot a scatterplot of Gene Significance vs. Module Membership in the brown module. 
+Clearly, GS and MM are highly correlated, illustrating that genes highly significantly associated with a trait are often also the most important (central) elements of modules associated with the trait.
+```{R, fig.width = 10, fig.height = 10}
+module = "turquoise"
+column = match(module, modNames)
+moduleGenes = moduleColors==module
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                  abs(geneTraitSignificance[moduleGenes, 1]),
+                  xlab = paste("Module Membership in", module, "module"),
+                  ylab = "Gene significance for ER Status",
+                  main = paste("Module membership vs. gene significance\n"),
+                  cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+```
+
+
+
+## 3.d Summary output of network analysis results
+We have found modules with high association with our trait of interest, and have identified their central players by the Module Membership measure. We now merge this statistical information with gene annotation and write out a file that summarizes the most important results and can be inspected in standard spreadsheet software such as MSExcel or Open Office Calc.
+Our expression data are only annotated by probe ID names. names(datExpr1) will return all probe Ids included in the analysis.
+```{R}
+head(names(datExpr1))
+#Return Entrez IDs belonging to the turquoise module
+names(datExpr1)[moduleColors=="turquoise"]
+```
+
+To facilitate interpretation of the results, we use a probe annotation file provided by the manufacturer of the expression arrays to connect probe IDs to gene names and universally recognized identification numbers (Entrez codes).
+```{R}
+annot = read.csv("GeneAnnotation_BC_data.csv")
+dim(annot)
+names(annot)
+Entrez_2050 = names(datExpr1)
+Entrez_2050_annot = match(Entrez_2050, annot$Entrez)
+# The following is the number or probes without annotation:
+sum(is.na(Entrez_2050_annot))
+# Should return 0.
+```
+
+
+We now create a data frame holding the following information for all probes: probe ID, gene symbol, Locus Link ID (Entrez code), module color, gene significance for weight, and module membership and p-values in all modules. The  modules will be ordered by their significance for weight, with the most significant ones to the left.
+```{R}
+geneInfo0 = data.frame(Entrez = Entrez_2050,
+            					GeneSymbol = annot$HGNC[Entrez_2050_annot],
+            					EntrezGeneID = annot$Entrez[Entrez_2050_annot],
+            					EnsemblGeneID = annot$Ensembl[Entrez_2050_annot],
+            					moduleColor = moduleColors,
+            					geneTraitSignificance,
+            					GSPvalue)
+
+#Order modules by their significance for er_status
+modOrder = order(-abs(cor(MEs, er_status, use = "p")))
+
+#Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership))
+{
+	oldNames = names(geneInfo0)
+	geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]],
+						            MMPvalue[, modOrder[mod]])
+	names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+						          paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+
+#Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.er_status))
+geneInfo = geneInfo0[geneOrder, ]
+```
+
+This data frame can be written into a text-format spreadsheet. The reader is encouraged to open and view the file in a spreadsheet software, or inspect it directly within R using
+the command fix(geneInfo).
+```{R}
+write.csv(geneInfo, file = "TNBC10vNormal10_geneInfo.csv")
+```
+
+
+
+
+
+# 4 Interfacing network analysis with other data such as functional annotation and gene ontology
+Our previous analysis has identified several modules (labeled brown, red, and salmon) that are highly associated with weight. To facilitate a biological interpretation, we would like to know the gene ontologies of the genes in the modules, whether they are significantly enriched in certain functional categories etc.
+
+
+## 4.a Output gene lists for use with online software and services
+One option is to simply export a list of gene identifiers that can be used as input for several popular gene ontology and functional enrichment analysis suites such as David or AmiGO. For example, we write out the LocusLinkID (entrez) codes for the brown module into a file.
+```{R}
+# Read in the probe annotation
+annot = read.csv(file = "GeneAnnotation_BC_data.csv");
+# Match probes in the data set to the probe IDs in the annotation file
+probes = names(datExpr)
+probes2annot = match(probes, annot$substanceBXH)
+# Get the corresponding Locuis Link IDs
+allLLIDs = annot$LocusLinkID[probes2annot];
+# $ Choose interesting modules
+intModules = c("brown", "red", "salmon")
+for (module in intModules)
+{
+# Select module probes
+modGenes = (moduleColors==module)
+# Get their entrez ID codes
+modLLIDs = allLLIDs[modGenes];
+# Write them into a file
+fileName = paste("LocusLinkIDs-", module, ".txt", sep="");
+write.table(as.data.frame(modLLIDs), file = fileName,
+row.names = FALSE, col.names = FALSE)
+}
+# As background in the enrichment analysis, we will use all probes in the analysis.
+fileName = paste("LocusLinkIDs-all.txt", sep="");
+write.table(as.data.frame(allLLIDs), file = fileName,
+row.names = FALSE, col.names = FALSE)
+```
+
+
+## 4.b Enrichment analysis directly within 
+The WGCNA package now contains a function to perform GO enrichment analysis using a simple, single step. To run the function, Biconductor packages GO.db, AnnotationDBI, and the appropriate organism-specific annotation package(s) need to be installed before running this code. The organism-specific packages have names of the form org.Xx.eg.db, where Xx stands for organism code, for example, Mm for mouse, Hs for human, etc. The only exception
+is yeast, for which no org.Xx.eg.db package is available; instead, the package carries the name org.Sc.sgd.db. Please visit the Bioconductor main page at http://www.bioconductor.org to download and install the required packages. In our case we are studying gene expressions from mice, so this code needs the package org.Mm.eg.db. Calling the GO enrichment analysis function GOenrichmentAnalysis is very simple. The function takes a vector of module labels,
+and the Entrez (a.k.a. Locus Link) codes for the genes whose labels are given
+```{R, eval = FALSE}
+GOenr = GOenrichmentAnalysis(moduleColors, allEntrezIds, organism = "human", nBestP = 10)
+```
+
+This is an enrichment table containing the 10 best terms for each module present in moduleColors.
+```{R, eval = FALSE}
+tab = GOenr$bestPTerms[[4]]$enrichment
+names(tab)
+```
+
+We refer the reader to the help page of the function within R (available using ?GOenrichmentAnalysis at the R prompt) for details of what each column means. Because the term definitions can be quite long, the table is a bit difficult to on the screen. For readers who prefer to look at tables in Excel or similar spreadsheet software, it is best to save the table into a file and open it using their favorite tool.
+```{R, eval = FALSE}
+write.table(tab, file = "GOEnrichmentTable_All_Modules.csv", sep = ",", quote = TRUE, row.names = FALSE)
+```
+
+On the other hand, to quickly take a look at the results, one can also abridge the table a bit and display it directly on screen.
+```{R, eval = FALSE}
+keepCols = c(1, 2, 5, 6, 7, 12, 13);
+screenTab = tab[, keepCols];
+# Round the numeric columns to 2 decimal places:
+numCols = c(3, 4);
+screenTab[, numCols] = signif(apply(screenTab[, numCols], 2, as.numeric), 2)
+# Truncate the the term name to at most 40 characters
+screenTab[, 7] = substring(screenTab[, 7], 1, 40)
+# Shorten the column names:
+colnames(screenTab) = c("module", "size", "p-val", "Bonf", "nInTerm", "ont", "term name");
+rownames(screenTab) = NULL;
+# Set the width of R's output. The reader should play with this number to obtain satisfactory output.
+options(width=95)
+# Finally, display the enrichment table:
+screenTab
+```
+
+
+
+
+
+# 5 Visualization of networks within R
+## 5.a Visualizing the gene network
+One way to visualize a weighted network is to plot its heatmap. Each row and column of the heatmap correspond to a single gene. The heatmap can depict adjacencies or topological overlaps, with light colors denoting low adjacency (overlap) and darker colors higher adjacency (overlap). In addition, the gene dendrograms and module colors are plotted along the top and left side of the heatmap.
+```{R, fig.width = 20, fig.height = 20}
+# Calculate topological overlap anew: this could be done more efficiently by saving the TOM
+# calculated during module detection, but let us do it again here.
+dissTOM = 1-TOMsimilarityFromExpr(datExpr1, power = 5)
+# Transform dissTOM with a power to make moderately strong connections more visible in the heatmap
+plotTOM = dissTOM^7;
+# Set diagonal to NA for a nicer plot
+diag(plotTOM) = NA;
+# Call the plot function
+TOMplot(plotTOM, geneTree, moduleColors, main = "Network heatmap plot, all genes")
+```
+
+Note that the generating the heatmap plot may take a substantial amount of time. It is possible to restrict the number of genes to speed up the plotting; however, the gene dendrogram of a subset of genes will often look different from the gene dendrogram of all genes. In the following example we restrict the number of plotted genes to 400.
+```{R, fig.width = 20, fig.height = 20}
+nSelect = 400
+# For reproducibility, we set the random seed
+set.seed(10);
+select = sample(nGenes, size = nSelect);
+selectTOM = dissTOM[select, select];
+
+# There's no simple way of restricting a clustering tree to a subset of genes, so we must re-cluster.
+selectTree = hclust(as.dist(selectTOM), method = "average")
+selectColors = moduleColors[select];
+
+# Open a graphical window
+# Taking the dissimilarity to a power, say 10, makes the plot more informative by effectively changing
+# the color palette; setting the diagonal to NA also improves the clarity of the plot
+plotDiss = selectTOM^7;
+diag(plotDiss) = NA;
+TOMplot(plotDiss, selectTree, selectColors, main = "Network heatmap plot, 400 genes")
+```
+
+
+## 5.b Visualizing the network of eigengenes
+It is often interesting to study the relationships among the found modules. One can use the eigengenes as representative profiles and quantify module similarity by eigengene correlation. The package contains a convenient function plotEigengeneNetworks that generates a summary plot of the eigengene network. It is usually informative to add a clinical trait (or multiple traits) to the eigengenes to see how the traits fit into the eigengene network.
+The heatmap depicts the Topological Overlap Matrix (TOM) among all genes in the analysis. Light color represents low overlap and progressively darker red color represents higher overlap. Blocks of darker colors along the diagonal are the modules. The gene dendrogram and
+module assignment are also shown along the left side and the top
+```{R, fig.width = 20, fig.height = 20}
+# Recalculate module eigengenes
+MEs = moduleEigengenes(datExpr1, moduleColors)$eigengenes
+
+# Isolate weight from the clinical traits
+ER_st = as.data.frame(datTraits$er_status)
+names(ER_st) = "ER_st"
+
+# Add the weight to existing module eigengenes
+MET = orderMEs(cbind(MEs, ER_st))
+plotEigengeneNetworks(MET, "", marDendro = c(0,4,1,2), marHeatmap = c(3,4,1,2), cex.lab = 0.8, xLabelsAngle = 90)
+```
+
+The function produces a dendrogram of the eigengenes and trait(s), and a heatmap of their relationships. To split the dendrogram and heatmap plots, we can use the following code. 
+The eigengene dendrogram and heatmap identify groups of correlated eigengenes termed meta-modules. For example, the dendrogram indicates that red, brown and bluw modules are
+highly related; their mutual correlations are stronger than their correlations with weight. On the other hand, the salmon module, which is also significantly correlated with weight, is not part of the same meta-module as the red, brown and blue modules, at least if meta-modules are defined as tight custers of modules (for example, modules with a correlation of eigengenes of at least 0.5). 
+```{R, fig.width = 10, fig.height = 10}
+plotEigengeneNetworks(MET, "Eigengene dendrogram", marDendro = c(0,4,2,0),
+plotHeatmaps = FALSE)
+
+plotEigengeneNetworks(MET, "Eigengene adjacency heatmap", marHeatmap = c(3,4,2,2),
+plotDendrograms = FALSE, xLabelsAngle = 90)
+```
+
+
+
+
+
+# 6. Exporting a gene network to external visualization software
+## 6.a Exporting to VisANT
+```{R}
+# Recalculate topological overlap
+TOM = TOMsimilarityFromExpr(datExpr, power = 5);
+
+# Read in the annotation file
+annot = read.csv(file = "GeneAnnotation_BC_data.csv");
+
+# Select module
+module = "turquoise"
+
+# Select module probes
+Entrez = names(datExpr1)
+inModule = (moduleColors==module)
+modEntrez = Entrez[inModule]
+
+# Select the corresponding Topological Overlap
+modTOM = TOM[inModule, inModule]
+dimnames(modTOM) = list(modEntrez, modEntrez)
+
+# Export the network into an edge list file VisANT can read
+vis = exportNetworkToVisANT(modTOM,
+                        	  file = paste("VisANTInput-", module, ".txt", sep=""),
+                          	weighted = TRUE,
+                           	threshold = 0,
+                          	probeToGene = data.frame(annot$Entrez, annot$HGNC))
+```
+
+Because the turquiose module is rather large, we can restrict the genes in the output to say the 40 top hub genes in the module.
+```{R}
+nTop = 40
+IMConn = softConnectivity(datExpr1[, modEntrez])
+top = (rank(-IMConn) <= nTop)
+vis = exportNetworkToVisANT(modTOM[top, top],
+                          	file = paste("VisANTInput-", module, "-top40.txt", sep=""),
+                          	weighted = TRUE,
+                          	threshold = 0,
+                          	probeToGene = data.frame(annot$Entrez, annot$HGNC))
+```
+
+## 6.b Exporting to Cytoscape
+Cytoscape allows the user to input an edge file and a node file, allowing the user to specify for example the link weights and the node colors. Here we demonstrate the output of two modules, the red and brown ones, to Cytoscape. Note that network input to Cytoscape is a bit more involved and the user should take care to select all necessary options for the edge and node files to be interpreted correctly. We refer the reader to Cytoscape documentation for all the necessary details.
+```{R}
+# Recalculate topological overlap if needed
+TOM = TOMsimilarityFromExpr(datExpr, power = 5);
+
+# Read in the annotation file
+annot = read.csv(file = "GeneAnnotation_BC_data.csv");
+
+# Select modules
+modules = c("turquoise")
+
+# Select module probes
+genes = names(datExpr1)
+inModule = is.finite(match(moduleColors, modules))
+modGenes1 = genes[inModule]
+modGenes2 = annot$HGNC[match(modGenes1, annot$Entrez)]
+
+# Select the corresponding Topological Overlap
+modTOM = TOM[inModule, inModule]
+dimnames(modTOM) = list(modGenes1, modGenes1)
+
+# Export the network into edge and node list files Cytoscape can read
+cyt = exportNetworkToCytoscape(modTOM,
+                            	edgeFile = paste("CytoscapeInput-edges-", paste(modules, collapse="-"), ".txt", sep=""),
+                            	nodeFile = paste("CytoscapeInput-nodes-", paste(modules, collapse="-"), ".txt", sep=""),
+                            	weighted = TRUE,
+                            	threshold = 0.6138,
+                            	nodeNames = modGenes1,
+                            	altNodeNames = modGenes2,
+                            	nodeAttr = moduleColors[inModule])
+
+```

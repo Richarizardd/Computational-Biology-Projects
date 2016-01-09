@@ -1,0 +1,214 @@
+---
+title: "Biostatistics"
+author: "Richard Chen"
+date: "August 23, 2015"
+output: html_document
+---
+
+# Glossary
+### WCGNA
+Weighted gene co-expression network analysis (WGCNA) is a systems biology method for describing the correlation patterns among genes and/or gene products. WGCNA can be used for finding clusters of highly correlated genes, for summarizing these clusters using the module eigengene or an intramodular hub gene, for relating clusters to one another and to external sample traits, and for calculating cluster membership measures.
+
+Correlation networks facilitate network based gene screening methods that can be used to identify candidate biomarkers or therapeutic targets.
+
+
+
+### Hierarchical Clustering
+Given a set of N items to be clustered, and an NxN distance (or similarity) matrix:
+
+1. Start by assigning each item to its own cluster, so that if you have N items, you now have N clusters, each containing just one item. Let the distances (similarities) between the clusters equal the distances (similarities) between the items they contain
+
+2. Find the closest (most similar) pair of clusters and merge them into a single cluster  = N-1 Clusters
+
+3. Compute distances (similarities) between the new cluster and each of the old clusters
+
+4. Repeat steps 2 and 3 until all items are clustered into a single cluster of size N
+
+
+
+### Co-expression Network
+Co-expression networks as undirected, weighted gene networks. 
+The nodes of such a network correspond to gene expression profiles, and edges between genes are determined by the pairwise correlations between gene expressions. 
+By raising the absolute value of the correlation to a power beta > 1 (soft thresholding), the weighted gene co-expression network construction emphasizes high correlations at the expense of low correlations.
+
+
+
+### Connectivity
+For each gene, the connectivity (also known as degree) is defined as the sum of connection strengths with the other network genes. 
+In co-expression networks, the connectivity measures how correlated a gene is with all other network genes.
+
+
+
+### Module
+Modules are clusters of highly interconnected genes. 
+In an unsigned co-expression network, modules correspond to clusters of genes with high absolute correlations. 
+In a signed network, modules correspond to positively correlated genes.
+
+
+
+### Intramodular Connectivity
+Intramodular connectivity measures how connected, or co-expressed, a given gene is with respect to the genes of a particular module. 
+The intramodular connectivity may be interpreted as a measure of module membership.
+
+
+
+### Module eigengene E
+The module eigengene E is the first principal component of a given module. 
+It can be considered a "summary variable" of the gene expression profiles in a module.
+
+
+
+### Module Membership
+Module Membership is the correlation of a gene's expression profile with the module eigengene of a given module.
+
+
+
+### Topological Overlap (TOM plots)
+While the adjacency considers each pair of genes in isolation.
+Topological overlap considers each pair of genes in relation to all other genes in the network.
+If the 2 nodes connect to the same group of other nodes, then they have a high topological overlap.
+
+
+
+### Module significance
+Module significance is determined as the average absolute gene significance measure for all genes in a given module. When gene significance is defined as the correlation of gene expression profiles with an external trait y, this measure tends to be highly related to the correlation between the module eigengene and y.
+
+
+
+### Eigengene significance
+When sample trait "y" is available (e.g. case control status or body weight), you can correlate the module eigengenes with this outcome.  The correlation coefficient is referred to as eigengene significance.
+
+
+
+### Gene significance GS
+The higher the absolute value of GSi, the more biologically significant is the i-th gene. A GS of zero indicates that the gene is not significant with regard to the biological question of interest.
+
+
+
+### GO
+Gene Ontology (GO) provides 3 controlled vocabularies to describe biological knowledge for genes and gene products.
+
+1. Biological Process (why) - How it pertains to the organism
+
+2. Cellular Component (where)- Its location
+
+3. Molecular Function (what) - Tasks performed at the molecular level 
+
+
+
+### Functional Enrichment Algorithms 
+There exists three classes of functional enrichment algorithms.
+
+1. Singular Enrichment Analysis (SEA)
+
+  a. Chi-square
+
+  b. Fisher's Exact Test
+
+  c. Bionomial Probability
+
+  d. Hypergeometric Distributions
+
+2. Gene Set Enrichment Analysis (GSEA)
+
+3. Modular Enrichment Analysis (MEA)
+
+  a. SEA Statistics 
+
+  b. Network Discovery Algorithms (term-to-term relationships) 
+
+The major current issues associated with functional data-mining of high-throughput genomic data include variations in the quality and coverage of gene annotation databases, the number of genes related to each annotation, gene redundancy among annotations, dependencies between genes, and multiple testing correction. According to Huang et al. (2009), no current statistical methods are able to fully address the complexities of high-throughput biological data-mining. In 2005, 11,434 of the 19,490 total biological process annotations available for Homo sapiens in the GO database were exclusively inferred from electronic annotations (IEA). Of the 18,310 GO gene annotations that were available for Homo sapiens in 2012, only 5,326 are exclusively IEA in nature. 
+
+The assumption is that gene expression observations are independent and identically distributed. Because expression measurements among functionally related genes are strongly correlated, this assumption is highly unlikely. Moreover, propagation of genes across multiple GO terms (gene redundancy) cause nodes within a given path to be highly correlated. As a consequence, the enrichment statistics of current SEA and MEA methods tend to be anti-conservative. A number of multiple testing correction methods have, therefore, been proposed for the functional analysis of high-throughput genomic data. Standard techniques such as Bonferroni and Sidack adjustments have been applied in situations when fewer than 50 functional categories are evaluated. However, these techniques assume that variables are independent and have been shown to be overly conservative. In instances where dependencies exist, various false discovery methods and bootstrapping are highly effective. 
+
+
+
+### Bonferroni correction
+The p-value of each gene is multiplied by the number of genes in the gene list. If the corrected p-value is still below the error rate, the gene will be significant:
+
+Corrected P-value= p-value * n (number of genes in test) <0.05
+
+As a consequence, if testing 1000 genes at a time, the highest accepted individual p-value is 0.00005, making the correction very stringent. With a Family-wise error rate of 0.05 (i.e., the probability of at least one error in the family), the expected number of false positives will be 0.05.
+
+
+
+### Bonferroni Step-down (Holm) correction
+1. The p-value of each gene is ranked from the smallest to the largest.
+
+2. The first p-value is multiplied by the number of genes present in the gene list. 
+
+	Corrected P-value= p-value * n < 0.05
+	
+3. The second p-value is multiplied by the number of genes less 1:
+
+	Corrected P-value= p-value * n-1 < 0.05
+	
+4. The third p-value is multiplied by the number of genes less 2:
+
+	Corrected P-value= p-value * n-2 < 0.05
+	
+It follows that sequence until no gene is found to be significant.
+
+
+
+### Westfall and Young Permutation
+Both Bonferroni and Holm methods are called single-step procedures, where each p-value is corrected independently. The Westfall and Young permutation method takes advantage of the dependence structure between genes, by permuting all genes at the same time. Westfall and Young permutation follows a step-down procedure similar to the Holm method, combined with a bootstrapping method to compute the p-value (null) distribution
+
+1. p-values are calculated for each gene based on the original data set and ranked.
+
+2. The permutation method creates a pseudo-data set by dividing the data into artificial treatment and control groups.
+
+3. p-values for all genes are computed on the pseudo-data set.
+
+4. The successive minima of the new p-values are retained and compared to the original ones.
+
+5. This process is repeated a large number of times, and the proportion of resampled data sets where the minimum pseudo-p-value is less than the original p-value is the adjusted p-value.
+
+
+
+### Benjamini and Hochberg False Discovery Rate
+This correction is the least stringent of all 4 options, and therefore tolerates more false positives. There will be also less false negatives. 
+
+1. The p-values of each gene are ranked from largest to smallest.
+
+2. The largest p-value remains as it is.
+
+3. The second largest p-value is multiplied by the total number of genes in gene list divided by its rank. 
+
+	Corrected p-value = p-value*(n/n-1) < 0.05
+	
+4. The third p-value is multiplied as in step 3:
+
+	Corrected p-value = p-value*(n/n-2) < 0.05
+
+
+
+### Cytoscape
+Cytoscape is an open source software platform for visualizing molecular interaction networks and biological pathways and integrating these networks with annotations, gene expression profiles and other state data. 
+
+Although Cytoscape was originally designed for biological research, now it is a general platform for complex network analysis and visualization. 
+
+
+
+### Chip Literature Robot (Chilibot) Natural Language Processing 
+Texts (including each title and abstract) are parsed into units of one sentence from MEDLINE abstracts.
+Sentences containing both query terms or their synonyms are subjected to part-of-speech (POS) tagging using the TnT tagger, which is followed
+by shallow parsing using CASS. 
+
+Sentences are then classified into one of five categories: stimulatory (interactive), inhibitory
+(interactive), neutral (interactive), parallel (non-interactive) and abstract co-occurrence only.
+The overall relationship between each pair of query terms is then specified based on the relationships found in the sentences. 
+
+Sentences are classified into interactive or non-interactive relationships based on the presence or absence of a verb phrase between the two query terms.
+Interactive relationships are converted into parallel relationship when there is a negation (such as "not") within the same clause of the verb phrase.
+
+The overall relationship between two terms is defined as interactive only when more than 20% of the sentences are detected as either stimulatory or
+inhibitory. 
+Co-occurrence is assigned when the two query terms are located in the same abstract but not the same sentence (text mining).
+
+Interactive relationships (circles) are neutral (gray),
+stimulatory (green), inhibitory (red) or both stimulatory/inhibitory (yellow). 
+The number within each icon indicates the quantity
+of abstracts retrieved for documenting that relationship. 
+Icons containing the plus sign ("+") represent "parallel relationships". Gray rhomboidal icons indicate that only co-occurrence was detected. 
+All arrowheads indicate the direction of the interaction, and some are bi-directional.

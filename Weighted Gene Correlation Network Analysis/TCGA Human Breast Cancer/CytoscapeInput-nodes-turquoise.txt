@@ -1,0 +1,9 @@
+nodeName	altName	nodeAttr.nodesPresent...
+8639	AOC3	turquoise
+126393	HSPB6	turquoise
+7532	YWHAG	turquoise
+48	ACO1	turquoise
+1431	CS	turquoise
+1842	ECM2	turquoise
+5140	PDE3B	turquoise
+400830	DEFB132	turquoise
