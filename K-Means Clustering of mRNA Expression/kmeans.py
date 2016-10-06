@@ -86,9 +86,9 @@ def kmeans(mean_list, coordinates_list):
             
             #Total XYZ
             for coordinates in mean.getCloseCoords():
-                x_tot = x_tot + coordinates[0]
-                y_tot = y_tot + coordinates[1]
-                z_tot = z_tot + coordinates[2]
+                x_tot += coordinates[0]
+                y_tot += coordinates[1]
+                z_tot += coordinates[2]
 
             #This takes the average
             if len(mean.getCloseCoords()) == 0:
@@ -122,9 +122,7 @@ def part1():
     #This for loop creates a list of coordinates, with each coordinate a list of three floats: x, y, and z
     for coordinates in clusters_list:
         coordinates = coordinates.split()
-        coordinates[0] = float(coordinates[0])
-        coordinates[1] = float(coordinates[1])
-        coordinates[2] = float(coordinates[2])
+        coordinates[0], coordinates[1], coordinates[2] = float(coordinates[0]), float(coordinates[1]), float(coordinates[2])
         coordinates_list.append(coordinates)
         
     for k in range(2,7):
@@ -153,10 +151,10 @@ def part1():
             for coordinates in mean.getCloseCoords():
                 str_coordinates = ''
                 for coordinate in coordinates:
-                    str_coordinates = str_coordinates + str(coordinate) + '\t'
-                str_coordinates = str_coordinates + str(cluster_index)
+                    str_coordinates += str(coordinate) + '\t'
+                str_coordinates += str(cluster_index)
                 print(str_coordinates, file = outfile)
-            cluster_index = cluster_index + 1
+            cluster_index += 1
 
         print('\n', file = outfile)
         
@@ -199,24 +197,24 @@ def kmeans_18_dimensions(mean_list, coordinates_list):
             
             #Total Dimensions
             for coordinates in mean.getCloseCoords():
-                dim_1 = dim_1 + coordinates[1]
-                dim_2 = dim_2 + coordinates[2]
-                dim_3 = dim_3 + coordinates[3]
-                dim_4 = dim_4 + coordinates[4]
-                dim_5 = dim_5 + coordinates[5]
-                dim_6 = dim_6 + coordinates[6]
-                dim_7 = dim_7 + coordinates[7]
-                dim_8 = dim_8 + coordinates[8]
-                dim_9 = dim_9 + coordinates[9]
-                dim_10 = dim_10 + coordinates[10]
-                dim_11 = dim_11 + coordinates[11]
-                dim_12 = dim_12 + coordinates[12]
-                dim_13 = dim_13 + coordinates[13]
-                dim_14 = dim_14 + coordinates[14]
-                dim_15 = dim_15 + coordinates[15]
-                dim_16 = dim_16 + coordinates[16]
-                dim_17 = dim_17 + coordinates[17]
-                dim_18 = dim_18 + coordinates[18]
+                dim_1 += coordinates[1]
+                dim_2 += coordinates[2]
+                dim_3 += coordinates[3]
+                dim_4 += coordinates[4]
+                dim_5 += coordinates[5]
+                dim_6 += coordinates[6]
+                dim_7 += coordinates[7]
+                dim_8 += coordinates[8]
+                dim_9 += coordinates[9]
+                dim_10 += coordinates[10]
+                dim_11 += coordinates[11]
+                dim_12 += coordinates[12]
+                dim_13 += coordinates[13]
+                dim_14 += coordinates[14]
+                dim_15 += coordinates[15]
+                dim_16 += coordinates[16]
+                dim_17 += coordinates[17]
+                dim_18 += coordinates[18]
 
             #New Mean
             if len(mean.getCloseCoords()) == 0:
